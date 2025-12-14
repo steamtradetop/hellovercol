@@ -1,0 +1,16 @@
+{
+  "name": "vercel-cloudflare-demo",
+  "version": "1.0.0",
+  "description": "A demo project to deploy on Vercel and call Cloudflare Workers",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "vercel",
+    "cloudflare",
+    "demo"
+  ],
+  "author": "Developer",
+  "license": "MIT"
+}

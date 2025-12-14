@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vercel + Cloudflare Worker Demo</title>
+    <meta name="description" content="A demo application deployed on Vercel that calls Cloudflare Workers">
+    <style>
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, Avenir Next, Avenir,
+                         Helvetica, sans-serif;
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 2rem; 
+            line-height: 1.5;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        h1 {
+            font-weight: 600;
+            font-size: 2rem;
+        }
+        button { 
+            background: #0070f3; 
+            color: white; 
+            border: none; 
+            padding: 0.75rem 1.5rem; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 1rem;
+            margin: 0.5rem;
+        }
+        button:hover { 
+            background: #0051a2; 
+        }
+        button.secondary {
+            background: #666;
+        }
+        button.secondary:hover {
+            background: #444;
+        }
+        #result { 
+            margin-top: 1rem; 
+            padding: 1rem; 
+            background: #f5f5f5; 
+            border-radius: 4px; 
+        }
+        pre { 
+            overflow-x: auto; 
+            background: #fff;
+            padding: 1rem;
+            border-radius: 4px;
+            max-height: 400px;
+        }
+        footer {
+            margin-top: 2rem;
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .config-section {
+            background: #f9f9f9;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        .config-section h3 {
+            margin-top: 0;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 0.5rem;
+            margin: 0.5rem 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        label {
+            font-weight: bold;
+        }
+        .endpoint-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 0.5rem;
+        }
+        .endpoint-item {
+            padding: 0.5rem;
+            border-bottom: 1px solid #eee;
+        }
+        .endpoint-item:last-child {
+            border-bottom: none;
+        }
+        .hidden {
+            display: none;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 1rem;
+        }
+        .tab {
+            padding: 0.5rem 1rem;
+            background: #eee;
+            cursor: pointer;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab.active {
+            background: #0070f3;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Vercel + Cloudflare Worker Demo</h1>
+        <p>This is a demo application deployed on Vercel that can call Cloudflare Workers.</p>
+    </header>
+    
+    <main>
+        <div class="tabs">
+            <div class="tab active" data-tab="config">Configuration</div>
+            <div class="tab" data-tab="endpoints">Saved Endpoints</div>
+        </div>
+        
+        <div id="configTab" class="tab-content active">
+            <div class="config-section">
+                <h3>Worker Configuration</h3>
+                <label for="workerUrl">Worker URL:</label>
+                <input type="text" id="workerUrl" placeholder="https://your-worker.your-subdomain.workers.dev/" value="https://loginworker.steamtradetop.workers.dev/wku/users/users/login">
+                
+                <label for="requestMethod">Method:</label>
+                <select id="requestMethod">
+                    <option value="GET">GET</option>
+                    <option value="POST" selected>POST</option>
+                    <option value="PUT">PUT</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+                
+                <label for="requestData">Request Data (JSON):</label>
+                <textarea id="requestData" rows="5">
+{
+  "p": ["guest3", "084e0343a0486ff05530df6c705c8bb4"],
+  "cols": ["id", "uname", "email"],
+  "getstart": 0,
+  "getnumber": 10,
+  "order": "id DESC"
+}
+                </textarea>
+                
+                <div class="btn-group">
+                    <button id="callWorkerDirectly">Call Worker Directly</button>
+                    <button id="addEndpoint" class="secondary">Save Endpoint</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="endpointsTab" class="tab-content">
+            <div class="config-section">
+                <h3>Saved Endpoints</h3>
+                <div id="endpointList" class="endpoint-list">
+                    <!-- Saved endpoints will appear here -->
+                </div>
+                <div class="btn-group">
+                    <button id="loadSampleEndpoints" class="secondary">Load Sample Endpoints</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="result"></div>
+    </main>
+    
+    <footer>
+        <p>Demo project showing integration between Vercel and Cloudflare Workers</p>
+    </footer>
+
+    <script>
+        // 初始化时加载保存的端点
+        let endpoints = JSON.parse(localStorage.getItem('workerEndpoints') || '[]');
+        
+        // Tab切换功能
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // 更新活动标签
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                const tabId = tab.getAttribute('data-tab');
+                document.getElementById(tabId + 'Tab').classList.add('active');
+            });
+        });
+        
+        // 更新端点列表显示
+        function updateEndpointList() {
+            const listElement = document.getElementById('endpointList');
+            if (endpoints.length === 0) {
+                listElement.innerHTML = '<p>No saved endpoints</p>';
+                return;
+            }
+            
+            listElement.innerHTML = endpoints.map((ep, index) => `
+                <div class="endpoint-item">
+                    <strong>${ep.name || `Endpoint ${index + 1}`}</strong>
+                    <div>
+                        <small>${ep.method} ${ep.url}</small>
+                    </div>
+                    <div>
+                        <button onclick="loadEndpoint(${index})" class="secondary">Load</button>
+                        <button onclick="removeEndpoint(${index})" class="secondary">Remove</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // 加载端点到表单
+        function loadEndpoint(index) {
+            const ep = endpoints[index];
+            document.getElementById('workerUrl').value = ep.url;
+            document.getElementById('requestMethod').value = ep.method;
+            document.getElementById('requestData').value = JSON.stringify(ep.data, null, 2);
+            
+            // 切换到配置标签
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector('[data-tab="config"]').classList.add('active');
+            document.getElementById('configTab').classList.add('active');
+        }
+        
+        // 移除端点
+        function removeEndpoint(index) {
+            endpoints.splice(index, 1);
+            localStorage.setItem('workerEndpoints', JSON.stringify(endpoints));
+            updateEndpointList();
+        }
+        
+        // 加载示例端点
+        document.getElementById('loadSampleEndpoints').addEventListener('click', () => {
+            endpoints = [
+                {
+                    url: 'https://loginworker.steamtradetop.workers.dev/wku/users/users/login',
+                    method: 'POST',
+                    data: {
+                        p: ["guest3", "084e0343a0486ff05530df6c705c8bb4"],
+                        cols: ["id", "uname", "email"],
+                        getstart: 0,
+                        getnumber: 10,
+                        order: "id DESC"
+                    },
+                    name: 'User Login'
+                },
+                {
+                    url: 'https://wk.steamauto.top/wku/users/users_balance/get',
+                    method: 'POST',
+                    data: {
+                        s: "f43cd6eb-5dda-d37e-cf62-d50a81917268"
+                    },
+                    name: 'User Balance'
+                }
+            ];
+            localStorage.setItem('workerEndpoints', JSON.stringify(endpoints));
+            updateEndpointList();
+            alert('Sample endpoints loaded!');
+        });
+        
+        // 直接调用Cloudflare Worker
+        document.getElementById('callWorkerDirectly').addEventListener('click', async () => {
+            try {
+                const workerUrl = document.getElementById('workerUrl').value;
+                const method = document.getElementById('requestMethod').value;
+                const requestData = document.getElementById('requestData').value;
+                
+                if (!workerUrl) {
+                    throw new Error('Please enter a Worker URL');
+                }
+                
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+                
+                if (method !== 'GET' && requestData) {
+                    options.body = JSON.stringify(JSON.parse(requestData));
+                }
+                
+                const response = await fetch(workerUrl, options);
+                const data = await response.json();
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>Response:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                    <p><strong>Status:</strong> ${response.status} ${response.statusText}</p>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        });
+        
+        // 添加当前配置到端点列表
+        document.getElementById('addEndpoint').addEventListener('click', () => {
+            try {
+                const workerUrl = document.getElementById('workerUrl').value;
+                const method = document.getElementById('requestMethod').value;
+                const requestData = document.getElementById('requestData').value;
+                
+                if (!workerUrl) {
+                    alert('Please enter a Worker URL');
+                    return;
+                }
+                
+                const data = requestData ? JSON.parse(requestData) : {};
+                
+                // 检查是否已存在相同URL的端点
+                const existingIndex = endpoints.findIndex(ep => ep.url === workerUrl);
+                if (existingIndex >= 0) {
+                    endpoints[existingIndex] = {
+                        url: workerUrl,
+                        method: method,
+                        data: data,
+                        name: `Endpoint ${existingIndex + 1}`
+                    };
+                } else {
+                    endpoints.push({
+                        url: workerUrl,
+                        method: method,
+                        data: data,
+                        name: `Endpoint ${endpoints.length + 1}`
+                    });
+                }
+                
+                localStorage.setItem('workerEndpoints', JSON.stringify(endpoints));
+                updateEndpointList();
+                
+                alert('Endpoint saved successfully!');
+            } catch (error) {
+                alert('Error saving endpoint: ' + error.message);
+            }
+        });
+        
+        // 初始化端点列表
+        updateEndpointList();
+        
+        // 页面加载时尝试填充一些示例端点（如果没有）
+        if (endpoints.length === 0) {
+            document.getElementById('loadSampleEndpoints').click();
+        }
+    </script>
+</body>
+</html>
